@@ -190,7 +190,6 @@ class Cross_stage(nn.Module):
 class Attention_Block(nn.Module):
     def __init__(self, f_size=[320,8,10], d_model=256, bin_size=256):
         super(Attention_Block, self).__init__()
-        # b_size = [f_size[0]//2, f_size[1], f_size[2]] # bottleneck
 
         self.Self_stage1 = Self_stage(f_size=f_size, d_model=d_model, num_head=16)
         self.Self_stage2 = Self_stage(f_size=f_size, d_model=64     , num_head=8 )
@@ -198,14 +197,6 @@ class Attention_Block(nn.Module):
         
         self.Cross_stage = Cross_stage(f_size=f_size, d_model=128, num_head=8, bin_size=bin_size) # Output 320/4 ch
 
-        # self.bottleneck_in = nn.Sequential(
-        #     nn.Conv2d(320, 160, kernel_size=1, stride=1, bias=False),
-        #     nn.LeakyReLU()
-        # )
-        # self.bottleneck_out = nn.Sequential(
-        #     nn.Conv2d(160, 320, kernel_size=1, stride=1, bias=False),
-        #     nn.LeakyReLU()
-        # )
         self.concat_Conv = nn.Sequential(
             nn.Conv2d(400, 320, kernel_size=1, stride=1, bias=False), # 320 + 80
             nn.LeakyReLU()
@@ -227,14 +218,14 @@ class Attention_Block(nn.Module):
 if __name__ == "__main__":
     from flops_profiler.profiler import get_model_profile
 
-    B = 10
+    B = 1
 
     from flops_profiler.profiler import get_model_profile
 
     class encap(nn.Module):
         def __init__(self):
             super().__init__()
-            self.attention = Attention_Block()
+            self.attention = Attention_Block(bin_size=64)
 
         def forward(self, x):
             dummy_x = torch.rand([B, 320, 8, 10])
