@@ -1,0 +1,8 @@
+batch_size: 80
+bin_size: 256
+d_model: 256
+epochs: 20
+learning_rate: 0.0005
+lidar_points: 60
+memo: Lidar point 60, bottleneck
+weight_decay: 0.0005
