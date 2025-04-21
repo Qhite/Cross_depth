@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import net
 import dataloader as dataloader
-import net.loss as loss
+import loss
 
 from tqdm import tqdm
 import wandb, datetime, pytz, math, yaml
