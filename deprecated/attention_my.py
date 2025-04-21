@@ -19,6 +19,7 @@ class Self_stage(nn.Module):
         self.f_size     = f_size
         self.d_model    = d_model
         self.num_head   = num_head
+        self.head_dim   = d_model // num_head
 
         # Patch Embedding
         self.Patch_Embedding = nn.Sequential(
@@ -31,10 +32,21 @@ class Self_stage(nn.Module):
         pe = self.f_size[1]//2 * self.f_size[2]//2
         self.PE = nn.Parameter(torch.rand(1, pe, self.d_model), requires_grad=True)
 
-        # Transformer
-        self.LN = nn.LayerNorm(self.d_model)
-        transformer_encoder_layers = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=self.num_head, dim_feedforward=512, batch_first=True, dropout=0.1)
-        self.transformer = nn.TransformerEncoder(transformer_encoder_layers, num_layers=3)
+        # Query, Key, Value
+        self.W_q = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_k = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_v = nn.Linear(self.d_model, self.d_model, bias=False)
+
+        # LayerNorm & Residual
+        self.LNR = Residual(
+            nn.Sequential(
+                nn.LayerNorm(self.d_model),
+                nn.Linear(self.d_model, self.d_model * 2),
+                nn.GELU(),
+                nn.Dropout(0.1),
+                nn.Linear(self.d_model * 2, self.d_model)
+            )
+        )
 
         # Recover TransConv
         self.TransConv = nn.Sequential(
@@ -50,11 +62,22 @@ class Self_stage(nn.Module):
         x = self.Patch_Embedding(img)
         x = x.flatten(2).permute(0, 2, 1)
         x = x + self.PE
+        
+        # Q, K, V Projection
+        Q = self.W_q(x).view(B, ff, self.num_head, self.head_dim).permute(0, 2, 1, 3)
+        K = self.W_k(x).view(B, ff, self.num_head, self.head_dim).permute(0, 2, 1, 3)
+        V = self.W_v(x).view(B, ff, self.num_head, self.head_dim).permute(0, 2, 1, 3)
 
-        # Transformer
-        x = self.transformer(x)
+        # Score
+        Score = torch.matmul(Q, K.permute(0, 1, 3, 2)) / (self.head_dim ** 0.5)
+        Score = F.softmax(Score, dim=-1)
 
-        # Recover
+        # Matmul Score and Value
+        Attention_Value = torch.matmul(Score, V)
+
+        # Concatenate and Feed-Forward Layer
+        Concate_Atten_Value = Attention_Value.permute(0,2,1,3).contiguous().view(B, ff, self.d_model)
+        x = self.LNR(Concate_Atten_Value)
         x = x.view(B, self.d_model, H//2, W//2)
         x = self.TransConv(x)
 
@@ -90,9 +113,21 @@ class Cross_stage(nn.Module):
         # Positional Encoding
         self.PE = nn.Parameter(torch.rand(1, self.f_size[1]+1, 1), requires_grad=True)
 
-        # Transfomer
-        transformer_encoder_layers = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=self.num_head, dim_feedforward=512, batch_first=True, dropout=0.1)
-        self.transformer = nn.TransformerEncoder(transformer_encoder_layers, num_layers=1)
+        # Query, Key, Value
+        self.W_q = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_k = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_v = nn.Linear(self.d_model, self.d_model, bias=False)
+
+        # LayerNorm & Residual
+        self.LNR = Residual(
+            nn.Sequential(
+                nn.LayerNorm(self.d_model),
+                nn.Linear(self.d_model, self.d_model * 2),
+                nn.GELU(),
+                nn.Dropout(0.1),
+                nn.Linear(self.d_model * 2, self.d_model)
+            )
+        )
 
         # Recover
         self.Width_Linear = nn.Sequential(
@@ -126,18 +161,28 @@ class Cross_stage(nn.Module):
         # Concate & Positional Embedding
         x = torch.concat((x, y), dim=1)
         x = x + self.PE
+        
+        # Q, K, V Projection
+        Q = self.W_q(x).view(B, H+1, self.num_head, self.head_dim).permute(0, 2, 1, 3)
+        K = self.W_k(x).view(B, H+1, self.num_head, self.head_dim).permute(0, 2, 1, 3)
+        V = self.W_v(x).view(B, H+1, self.num_head, self.head_dim).permute(0, 2, 1, 3)
 
-        # Transfomer
-        x = self.transformer(x)
+        # Score
+        Score = torch.matmul(Q, K.permute(0, 1, 3, 2)) / (self.head_dim ** 0.5)
+        Score = F.softmax(Score, dim=-1)
 
-        # Recover
+        # Matmul Score and Value
+        Attention_Value = torch.matmul(Score, V)
+
+        # Concatenate and Feed-Forward Layer
+        Concate_Atten_Value = Attention_Value.permute(0,2,1,3).contiguous().view(B, H+1, self.d_model)
+        x = self.LNR(Concate_Atten_Value)
         x, bin = x[:, :-1, :], x[:, -1, :]
-        bin = self.bin_out(bin)
-
         x = self.Width_Linear(x)
         x = x.view(B, H, -1, W)
         x = x.permute(0, 2, 1, 3)
         x = self.out_Conv(x)
+        bin = self.bin_out(bin)
 
         return x, bin
 
@@ -145,27 +190,25 @@ class Attention_Block(nn.Module):
     def __init__(self, f_size=[320,8,10], d_model=256, bin_size=256):
         super(Attention_Block, self).__init__()
 
-        self.Self_stage = Self_stage(f_size=f_size, d_model=d_model, num_head=16) # Output 320 ch
+        self.Self_stage1 = Self_stage(f_size=f_size, d_model=d_model, num_head=16)
+        self.Self_stage2 = Self_stage(f_size=f_size, d_model=64     , num_head=8 )
+        self.Self_stage3 = Self_stage(f_size=f_size, d_model=d_model, num_head=16) # Output 320 ch
+        
         self.Cross_stage = Cross_stage(f_size=f_size, d_model=128, num_head=8, bin_size=bin_size) # Output 320/4 ch
 
-        self.LN = nn.LayerNorm(f_size[1] * f_size[2])
         self.concat_Conv = nn.Sequential(
             nn.Conv2d(400, 320, kernel_size=1, stride=1, bias=False), # 320 + 80
             nn.LeakyReLU()
         )
     
-    def LayerNorm(self, feat):
-        B, C, H, W = feat.size()
-        feat = feat.flatten(2)
-        feat = self.LN(feat)
-        feat = feat.view(B, C, H, W)
-        return feat
-    
     def forward(self, img_f, ld_f):
-        feat = self.Self_stage(img_f)
+        feat = self.Self_stage1(img_f)
+        # feat = self.bottleneck_in(feat)
+        feat = self.Self_stage2(feat)
+        # feat = self.bottleneck_out(feat)
+        feat = self.Self_stage3(feat)
         feat_c, bin = self.Cross_stage(feat, ld_f)
         feat = torch.concat((feat, feat_c), dim=1)
-        feat = self.LayerNorm(feat)
         feat = self.concat_Conv(feat)
 
         return feat, bin
@@ -175,6 +218,8 @@ if __name__ == "__main__":
     from flops_profiler.profiler import get_model_profile
 
     B = 1
+
+    from flops_profiler.profiler import get_model_profile
 
     class encap(nn.Module):
         def __init__(self):
