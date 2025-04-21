@@ -20,9 +20,9 @@ torch.backends.cudnn.deterministic  = True
 PATH = "/root/lhw"
 
 batch_size      = 80
-learning_rate   = 0.0005
-epochs          = 20
-weight_decay    = 5e-4
+learning_rate   = 4e-4
+epochs          = 10
+weight_decay    = 1e-2
 d_model         = 128
 bin_size        = 64
 lidar_points    = 60
@@ -202,7 +202,7 @@ def train(model):
     for epoch in range(epochs):
         model.train()
 
-        update_lr(optim=optimizer, epoch=epoch)
+        # update_lr(optim=optimizer, epoch=epoch)
 
         train_tqdm = tqdm(enumerate(train_NYU), total=len(train_NYU))
         loss_sum = torch.zeros(1)
@@ -226,7 +226,7 @@ def train(model):
             loss_sum += loss.clone().detach().cpu()
 
             optimizer.step()
-            # scheduler.step()
+            scheduler.step()
 
             if (i>0) & (i%10==0):
                 wandb.log({
