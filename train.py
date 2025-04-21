@@ -23,8 +23,8 @@ batch_size      = 80
 learning_rate   = 0.0005
 epochs          = 20
 weight_decay    = 5e-4
-d_model         = 256
-bin_size        = 256
+d_model         = 128
+bin_size        = 64
 lidar_points    = 60
 
 depth_range=[0.01, 10]
@@ -33,7 +33,7 @@ now = datetime.datetime.now()
 now.astimezone(pytz.timezone("Asia/Seoul"))
 run_time_tag = now.strftime("RUN_%m-%d-%I-%M-%S")
 
-run_memo = "Lidar point 60, bottleneck"
+run_memo = f"Torch Transformer Bin: {bin_size}"
 
 wandb.init(
     project="Cross_depth_rev",

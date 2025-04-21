@@ -33,7 +33,7 @@ class Self_stage(nn.Module):
 
         # Transformer
         self.LN = nn.LayerNorm(self.d_model)
-        transformer_encoder_layers = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=self.num_head, dim_feedforward=512, batch_first=True, dropout=0.1)
+        transformer_encoder_layers = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=self.num_head, dim_feedforward=1024, batch_first=True, dropout=0.1)
         self.transformer = nn.TransformerEncoder(transformer_encoder_layers, num_layers=3)
 
         # Recover TransConv
