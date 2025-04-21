@@ -202,7 +202,7 @@ def train(model):
     for epoch in range(epochs):
         model.train()
 
-        # update_lr(optim=optimizer, epoch=epoch)
+        update_lr(optim=optimizer, epoch=epoch)
 
         train_tqdm = tqdm(enumerate(train_NYU), total=len(train_NYU))
         loss_sum = torch.zeros(1)
@@ -226,7 +226,7 @@ def train(model):
             loss_sum += loss.clone().detach().cpu()
 
             optimizer.step()
-            scheduler.step()
+            # scheduler.step()
 
             if (i>0) & (i%10==0):
                 wandb.log({
