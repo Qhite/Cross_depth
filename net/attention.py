@@ -99,15 +99,14 @@ class Cross_stage(nn.Module):
             nn.Conv2d(self.f_size[0], self.f_size[0]//2, kernel_size=1, stride=1),
             nn.GELU()
         )
-        self.Patch_Conv = nn.Sequential(
-            nn.Conv1d(8, 8, kernel_size=5, stride=5),
+        self.Patch_Linear = nn.Sequential(
+            nn.Linear(self.f_size[0]//2 * self.f_size[2], d_model * 2),
             nn.GELU(),
-            nn.Conv1d(8, 8, kernel_size=3, stride=2, padding=1),
-            nn.GELU(),
+            nn.Linear(d_model * 2, d_model),
+            nn.GELU()
         )
         self.Lidar_Embedding = nn.Sequential(
-            nn.Conv1d(4, 1, kernel_size=1, stride=1),
-            nn.Linear(256, 160),
+            nn.Linear(384, self.d_model),
             nn.GELU()
         )
 
@@ -115,9 +114,9 @@ class Cross_stage(nn.Module):
         self.PE = nn.Parameter(torch.rand(1, self.f_size[1]+1, 1), requires_grad=True)
 
         # Query, Key, Value
-        self.W_q = nn.Linear(160, self.d_model, bias=False)
-        self.W_k = nn.Linear(160, self.d_model, bias=False)
-        self.W_v = nn.Linear(160, self.d_model, bias=False)
+        self.W_q = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_k = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.W_v = nn.Linear(self.d_model, self.d_model, bias=False)
 
         # LayerNorm & Residual
         self.LNR = Residual(
@@ -155,8 +154,8 @@ class Cross_stage(nn.Module):
 
         # Patch Embedding
         x = self.Patch_Embedding(img)
-        x = x.permute(0, 2, 3, 1).flatten(2) # B H C*W
-        x = self.Patch_Conv(x)
+        x = x.permute(0, 2, 1, 3).flatten(2)
+        x = self.Patch_Linear(x)
         y = self.Lidar_Embedding(ld)
 
         # Concate & Positional Embedding
@@ -191,11 +190,11 @@ class Attention_Block(nn.Module):
     def __init__(self, f_size=[320,8,10], d_model=256, bin_size=256):
         super(Attention_Block, self).__init__()
 
-        self.Self_stage1 = Self_stage(f_size=f_size, d_model=d_model, num_head=8)
-        self.Self_stage2 = Self_stage(f_size=f_size, d_model=d_model, num_head=8)
-        self.Self_stage3 = Self_stage(f_size=f_size, d_model=d_model, num_head=8) # Output 320 ch
+        self.Self_stage1 = Self_stage(f_size=f_size, d_model=d_model, num_head=16)
+        self.Self_stage2 = Self_stage(f_size=f_size, d_model=64     , num_head=8 )
+        self.Self_stage3 = Self_stage(f_size=f_size, d_model=d_model, num_head=16) # Output 320 ch
         
-        self.Cross_stage = Cross_stage(f_size=f_size, d_model=128, num_head=4, bin_size=bin_size) # Output 320/4 ch
+        self.Cross_stage = Cross_stage(f_size=f_size, d_model=128, num_head=8, bin_size=bin_size) # Output 320/4 ch
 
         self.concat_Conv = nn.Sequential(
             nn.Conv2d(400, 320, kernel_size=1, stride=1, bias=False), # 320 + 80
@@ -204,7 +203,9 @@ class Attention_Block(nn.Module):
     
     def forward(self, img_f, ld_f):
         feat = self.Self_stage1(img_f)
+        # feat = self.bottleneck_in(feat)
         feat = self.Self_stage2(feat)
+        # feat = self.bottleneck_out(feat)
         feat = self.Self_stage3(feat)
         feat_c, bin = self.Cross_stage(feat, ld_f)
         feat = torch.concat((feat, feat_c), dim=1)
@@ -227,8 +228,7 @@ if __name__ == "__main__":
 
         def forward(self, x):
             dummy_x = torch.rand([B, 320, 8, 10])
-            # dummy_y = torch.rand([B, 1, 384])
-            dummy_y = torch.rand([B, 4, 256])
+            dummy_y = torch.rand([B, 1, 384])
 
             output, bin = self.attention(dummy_x, dummy_y)
             # print(output.size(), bin.size())

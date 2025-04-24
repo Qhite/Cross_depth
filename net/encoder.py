@@ -19,9 +19,7 @@ class Encoder(nn.Module):
         self.l_enc = nn.Sequential(
             nn.Linear(lidar_point, 256),
             nn.LeakyReLU(),
-            nn.Conv1d(1, 2, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv1d(2, 4, kernel_size=1, stride=1),
+            nn.Linear(256, 384),
             nn.LeakyReLU(),
         )
     
