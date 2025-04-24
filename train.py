@@ -121,16 +121,19 @@ class pseudo_lidar():
         self.fov_step = 0.325
         self.max_step = int((self.max_fov - self.min_fov) // self.fov_step) + 1 # 104
     
-    def __call__(self, depth, epoch):
+    def __call__(self, depth, epoch, vaild=False):
         B, _, H, W = depth.size()
 
         x, y, z = to_pcl(depth=depth)
         d = torch.sqrt(x**2 + z**2)
         theta = torch.atan2(y, d) / PI * 180
         
-        top     = int(40 - 0.5 * epoch)
-        bottom  = int(60 + 0.5 * epoch)
+        top     = int(42 - 0.5 * epoch)
+        bottom  = int(63 + 0.5 * epoch)
         sel = torch.randint(top, bottom, (B,1,1), device=device)
+
+        if vaild:
+            sel = 52
 
         mask_up = torch.ge(theta, self.min_fov + sel     * self.fov_step)
         mask_lo = torch.le(theta, self.min_fov + (sel+1) * self.fov_step)
@@ -261,14 +264,15 @@ def validate(epoch, model):
 
     for i, data in valid_tqdm:
         image, depth = data[0], data[1]
-        lidar = get_lidar(depth=depth, epoch=epoch)
+        lidar = get_lidar(depth=depth, epoch=epoch, vaild=True)
 
         image = image.to(device)
         depth = depth.to(device)
         lidar = lidar.to(device)
 
-        predict, centers = model(image, lidar)
-        p, c = predict.clone().detach(), centers.clone().detach()
+        with torch.no_grad:
+            predict, centers = model(image, lidar)
+            p, c = predict.clone().detach(), centers.clone().detach()
         
         loss = Loss(p, c, depth, lidar).detach()
         loss_sum += loss.cpu()
