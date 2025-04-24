@@ -8,6 +8,7 @@ from PIL import Image
 class NYU_dataset(Dataset):
     def __init__(self, path="/root",split="train"):
         super(NYU_dataset, self).__init__()
+        self.split = split
 
         if split == "train":
             self.scale = 10
@@ -35,10 +36,15 @@ class NYU_dataset(Dataset):
         else:
             self.RandomFlip = RandomHorizontalFlipBoth(0)
 
-        self.image_transform = transforms.Compose([
+        self.image_transform_train = transforms.Compose([
             transforms.ToTensor(),
             Lighting(0.1, __imagenet_pca['eigval'], __imagenet_pca['eigvec']),
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+        ])
+        self.image_transform = transforms.Compose([
+            transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
         ])
@@ -58,7 +64,10 @@ class NYU_dataset(Dataset):
 
         image, depth = self.RandomFlip(image, depth)
 
-        image = self.image_transform(image)
+        if self.split == "train":
+            image = self.image_transform_train(image)
+        else:
+            image = self.image_transform(image)
         depth = transforms.ToTensor()(depth) * self.scale
 
         return [image, depth]

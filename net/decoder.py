@@ -13,18 +13,13 @@ def _conv(in_channel, out_channel):
     )
 
 class _up_sample(nn.Module):
-    def __init__(self, in_ch, skip_ch, out_ch):
+    def __init__(self, in_ch, out_ch):
         super().__init__()
-        self.skip_conv  = nn.Sequential(
-            _conv(skip_ch, out_ch),
-            nn.Dropout(0.1)
-        )
-        self.out_conv   = _conv(in_ch + out_ch, out_ch)
+        self.out_conv   = _conv(in_ch, out_ch)
     
     def forward(self, feat, skip):
         up_size = [skip.size(2), skip.size(3)]
         feat = F.interpolate(feat, size=up_size, mode="bilinear", align_corners=True)
-        skip = self.skip_conv(skip)
         feat = torch.concat([feat, skip], dim=1)
 
         return self.out_conv(feat)
@@ -35,10 +30,10 @@ class Decoder(nn.Module): # Interpolation & Conv
         super(Decoder, self).__init__()
         self.dim = dim
 
-        self.up1 = _up_sample(feat_ch[0],   feat_ch[1], self.dim)
-        self.up2 = _up_sample(self.dim,     feat_ch[2], self.dim)
-        self.up3 = _up_sample(self.dim,     feat_ch[3], self.dim)
-        self.up4 = _up_sample(self.dim,     feat_ch[4], self.dim)
+        self.up1 = _up_sample(feat_ch[0]    + feat_ch[1], self.dim * 8)
+        self.up2 = _up_sample(self.dim * 8  + feat_ch[2], self.dim * 4)
+        self.up3 = _up_sample(self.dim * 4  + feat_ch[3], self.dim * 2)
+        self.up4 = _up_sample(self.dim * 2  + feat_ch[4], self.dim * 1)
 
 
     def forward(self, x, skip_buff=[]):

@@ -1,18 +1,17 @@
 import torch
-import torch.nn as nn
 import net
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = net.DepthNet(lidar_point=60, bin_size=64).to(device)
-model.load_state_dict(torch.load("./pre_trained/bin_64.pth.tar", weights_only=True))
+model = net.DepthNet(lidar_point=60, bin_size=256).to(device)
+model.load_state_dict(torch.load("./pre_trained/bin_256.pth.tar", weights_only=True))
 model.eval()
 
 import dataloader
 import torch.functional as F
-from net import loss
 from tqdm import tqdm
 from math import pi
+import matplotlib.pyplot as plt
 
 PI = torch.tensor(pi)
 
@@ -56,12 +55,12 @@ class pseudo_lidar():
         d = torch.sqrt(x**2 + z**2)
         theta = torch.atan2(y, d) / PI * 180
         
-        top     = int(40 - 0.5 * epoch)
-        bottom  = int(60 + 0.5 * epoch)
+        top     = int(50)
+        bottom  = int(51)
         sel = torch.randint(top, bottom, (B,1,1), device=device)
 
-        mask_up = torch.ge(theta, self.min_fov + sel     * self.fov_step)
-        mask_lo = torch.le(theta, self.min_fov + (sel+1) * self.fov_step)
+        mask_up = torch.ge(theta, self.min_fov + 50 * self.fov_step)
+        mask_lo = torch.le(theta, self.min_fov + 51 * self.fov_step)
 
         mask = torch.logical_and(mask_lo, mask_up).unsqueeze(1)
 
@@ -110,24 +109,30 @@ PATH = "/root"
 valid_NYU = dataloader.get_dataloader(path=PATH, batch_size=1, split="test", shuffle=False, num_workers=12)
 valid_tqdm = tqdm(enumerate(valid_NYU), total=len(valid_NYU))
 get_lidar = pseudo_lidar(lidar_points=60)
-Loss = loss.Loss_functions(depth_min=0.01)
-loss_sum = torch.zeros(1)
 metric_sum = torch.zeros(7)
 
-for i, data in valid_tqdm:
-    image, depth = data[0], data[1]
-    lidar = get_lidar(depth=depth, epoch=20)
+starter = torch.cuda.Event(enable_timing=True)
+ender   = torch.cuda.Event(enable_timing=True)
 
-    image = image.to(device)
-    depth = depth.to(device)
-    lidar = lidar.to(device)
+with torch.no_grad():
+    for i, data in valid_tqdm:
+        image, depth = data[0], data[1]
+        lidar = get_lidar(depth=depth, epoch=20)
 
-    predict, centers = model(image, lidar)
-    p, c = predict.clone().detach(), centers.clone().detach()
-    
-    loss = Loss(p, c, depth, lidar).detach()
-    loss_sum += loss.cpu()
-    metric = cal_metric(p, depth)
-    metric_sum += metric
+        image = image.to(device)
+        depth = depth.to(device)
+        lidar = lidar.to(device)
 
-    valid_tqdm.set_description(f"Valid: Loss {float(loss_sum)/(i+1):.3f} | RMS: {metric_sum[0]/(i+1):.3f} | REL: {metric_sum[2]/(i+1):.3f} | D1: {metric_sum[4]/(i+1):.3f}")
+        starter.record()
+        predict, centers = model(image, lidar)
+        ender.record()
+        torch.cuda.synchronize()
+
+        p, c = predict.clone().detach(), centers.clone().detach()
+        
+        metric = cal_metric(p, depth)
+        metric_sum += metric
+
+        valid_tqdm.set_description(f"Valid: Time: {starter.elapsed_time(ender):3.2f} | RMS: {metric_sum[0]/(i+1):.3f} | REL: {metric_sum[2]/(i+1):.3f} | D1: {metric_sum[4]/(i+1):.3f}")
+        plt.imsave(f"/root/output/{i}_gt.png", depth.cpu().squeeze(), cmap="magma_r", vmin=0.01, vmax=depth.max()*1.1)
+        plt.imsave(f"/root/output/{i}_pr.png", p.cpu().squeeze(), cmap="magma_r", vmin=0.01, vmax=depth.max()*1.1)
