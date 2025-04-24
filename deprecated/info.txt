@@ -31,18 +31,5 @@ cy = 2.5373616633400465e+02
 [10, 320, 8, 10]
 
 
-Encoder: FLOPs: 2.22G | MACS: 1.08G | Params: 4.01M
-Transfo: 
-Decoder: FLOPs: 0.25G | MACS: 0.12G | Params: 100.87K
-d-384  : FLOPs: 3.21G | MACS: 1.57G | Params: 15.24M    # d_model=384 bin_size=256
-d-256  : FLOPs: 3.07G | MACS: 1.49G | Params: 11.50M    # d_model=256 bin_size=256
-d-160  : FLOPs: 2.98G | MACS: 1.45G | Params: 9.01M     # d_model=160 bin_size=256
-d-128  : FLOPs: 2.95G | MACS: 1.43G | Params: 8.23M     # d_model=128 bin_size=256
-## Old One
-
-__model_info__ = {
-    "mobilenetv2" : [[1, 3, 6, 13, 17], [320, 96, 32, 24, 16]],
-    "mobilenetv3_small" : [[0, 1, 3, 6, 11], [96, 40, 24, 16, 16]],
-    "mobilenetv3_large" : [[1, 3, 6, 12, 15], [160, 112, 40, 24, 16]],
-    "efficientnetb0" : [[1, 2, 3, 5, 7], [320, 112, 40, 24, 16]],
-}
+Logitech C270 webcam
+Horizontal Fov 60

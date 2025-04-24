@@ -33,7 +33,7 @@ now = datetime.datetime.now()
 now.astimezone(pytz.timezone("Asia/Seoul"))
 run_time_tag = now.strftime("RUN_%m-%d-%I-%M-%S")
 
-run_memo = f"Torch Transformer Bin: {bin_size}"
+run_memo = f"Conv1d Test"
 
 wandb.init(
     project="Cross_depth_rev",
