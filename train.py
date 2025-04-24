@@ -270,7 +270,7 @@ def validate(epoch, model):
         depth = depth.to(device)
         lidar = lidar.to(device)
 
-        with torch.no_grad:
+        with torch.no_grad():
             predict, centers = model(image, lidar)
             p, c = predict.clone().detach(), centers.clone().detach()
         
