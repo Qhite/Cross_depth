@@ -9,7 +9,7 @@ B = 1
 class encap(nn.Module):
     def __init__(self):
         super().__init__()
-        self.model = net.DepthNet(lidar_point=60, f_size=[320,8,10], feat_ch=[320, 112, 40, 24, 16], d_model=128, bin_size=64).cuda()
+        self.model = net.DepthNet(lidar_point=60, f_size=[320,8,10], feat_ch=[320, 112, 40, 24, 16], d_model=256, bin_size=64).cuda()
 
     def forward(self, x):
         dummy_x = torch.rand([B, 3, 228, 304]).cuda()
