@@ -4,7 +4,7 @@ import net
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = net.DepthNet(lidar_point=60, bin_size=64).to(device)
-model.load_state_dict(torch.load("./pre_trained/bin_64.pth.tar", weights_only=True))
+model.load_state_dict(torch.load("./pre_trained/bin_64.pth", weights_only=True))
 model.eval()
 
 import dataloader
